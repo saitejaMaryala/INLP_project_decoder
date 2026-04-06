@@ -1,0 +1,8 @@
+Collecting intel-extension-for-pytorch
+  Using cached intel_extension_for_pytorch-2.8.0-cp310-cp310-manylinux_2_28_x86_64.whl.metadata (8.0 kB)
+Requirement already satisfied: psutil in /ssd_scratch/saiteja/miniconda3/envs/gsq/lib/python3.10/site-packages (from intel-extension-for-pytorch) (7.2.2)
+Requirement already satisfied: numpy in /ssd_scratch/saiteja/miniconda3/envs/gsq/lib/python3.10/site-packages (from intel-extension-for-pytorch) (2.2.6)
+Requirement already satisfied: packaging in /ssd_scratch/saiteja/miniconda3/envs/gsq/lib/python3.10/site-packages (from intel-extension-for-pytorch) (26.0)
+Using cached intel_extension_for_pytorch-2.8.0-cp310-cp310-manylinux_2_28_x86_64.whl (49.9 MB)
+Installing collected packages: intel-extension-for-pytorch
+Successfully installed intel-extension-for-pytorch-2.8.0
