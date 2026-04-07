@@ -138,6 +138,11 @@ def main():
     args = parser.parse_args()
 
     model, tokenizer = load_model(args.model_path)
+
+    # Fix padding token fo LLAMA 
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        
     test_path = os.path.join(args.dataset_path, "test")
     dataset = load_from_disk(test_path)
 

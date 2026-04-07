@@ -19,13 +19,32 @@ def load_model(model_path):
             device_map="auto",         # spreads layers across all 4 GPUs
             torch_dtype=torch.float16,
             trust_remote_code=True,
-            attn_implementation="sdpa",  # native PyTorch fast attention
         )
-
-    # Pad token fix (common issue with Llama)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.pad_token_id = tokenizer.eos_token_id
 
     model.eval()
     return model, tokenizer
+
+if __name__ == "__main__":
+    model_path = "/home/sai.teja/gsq_decoder/hf_models/Llama-3.1-8B-Instruct"
+    model, tokenizer = load_model(model_path)
+    print("Model loaded successfully")
+
+    prompt = "Once upon a time"
+    # get the device of the model
+    device = next(model.parameters()).device
+
+    # move inputs to that device
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=50,
+            do_sample=True,
+            temperature=0.8,
+            pad_token_id=tokenizer.eos_token_id,  # important
+            eos_token_id=tokenizer.eos_token_id
+        )
+
+    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    print(generated_text)

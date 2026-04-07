@@ -18,22 +18,21 @@ echo "Starting evaluation for: $MODEL_PATH"
 echo "Available GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 echo "==========================================="
 
-# Make all 4 GPUs visible
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=0
 
 echo -e "\n[1/4] Evaluating on MMLU..."
 PYTHONPATH=. python3 scripts/run_mmlu.py \
     --model_path "$MODEL_PATH" \
-    --batch_size 32          # lower to 16 if OOM, raise to 64 if VRAM allows
+    --batch_size 16          # lower to 16 if OOM, raise to 64 if VRAM allows
 
-# echo -e "\n[2/4] Evaluating on StereoSet..."
-# PYTHONPATH=. python3 scripts/run_stereoset.py --model_path "$MODEL_PATH"
+echo -e "\n[2/4] Evaluating on StereoSet..."
+PYTHONPATH=. python3 scripts/run_stereoset.py --model_path "$MODEL_PATH"
 
-# echo -e "\n[3/4] Evaluating on BBQ..."
-# PYTHONPATH=. python3 scripts/run_bbq.py --model_path "$MODEL_PATH"
+echo -e "\n[3/4] Evaluating on BBQ..."
+PYTHONPATH=. python3 scripts/run_bbq.py --model_path "$MODEL_PATH"
 
-# echo -e "\n[4/4] Evaluating on WinoBias..."
-# PYTHONPATH=. python3 scripts/run_winobias.py --model_path "$MODEL_PATH"
+echo -e "\n[4/4] Evaluating on WinoBias..."
+PYTHONPATH=. python3 scripts/run_winobias.py --model_path "$MODEL_PATH"
 
 echo "==========================================="
 echo "Evaluation completed for: $MODEL_PATH"
