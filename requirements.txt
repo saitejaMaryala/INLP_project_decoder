@@ -2,6 +2,7 @@ transformers>=4.40.0
 datasets>=2.18.0
 accelerate>=0.27.0
 autoawq>=0.2.5
+torch
 numpy>=1.24.0
 scipy>=1.11.0
 tqdm>=4.66.0
@@ -10,3 +11,7 @@ bitsandbytes>=0.43.0
 einops>=0.7.0
 protobuf
 tiktoken
+pandas
+scikit-learn
+fairlearn
+matplotlib
