@@ -6,10 +6,64 @@ Run the decoder fairness post-processing pipeline on any dataset that exposes `t
 PYTHONPATH=. python scripts/run_decoder_phase5.py \
 	--data_path path/to/decoder_data.json \
 	--model_name gpt2 \
+	--froc-mode both \
+	--froc-eps 0.02 \
 	--output_dir outputs/decoder_phase5
 ```
 
-The runner saves `metrics_before_after.csv`, `roc_gap.csv`, `thresholds.json`, `summary.json`, and plots in the output directory.
+When `--froc-mode both` is used, mode-specific directories are generated:
+
+- `outputs/decoder_phase5/phase23_strict/`
+- `outputs/decoder_phase5/phase23_pragmatic/`
+
+Each mode directory contains:
+
+- `phase23_verification_report.md`
+- `metrics_before_after.csv`
+- `roc_gap.csv`
+- `thresholds.json`
+- `transport_diagnostics.json`
+- `threshold_invariance.csv`
+- `summary.json`
+- plots (`fairness_comparison.png`, `roc_gap_comparison.png`, and per-model ROC figures)
+
+### Strict vs pragmatic mode
+
+- `--froc-mode pragmatic`: deterministic threshold matching to a global operating point.
+- `--froc-mode strict`: disadvantaged-group-aware transport-style threshold targeting with an L1 budget controlled by `--froc-eps`.
+- `--froc-mode both`: runs strict and pragmatic in a single command and writes separate artifact bundles.
+
+### Reproducible wrapper (archive + rerun)
+
+Use the PowerShell wrapper to archive previous outputs and regenerate strict/pragmatic bundles in one command:
+
+```powershell
+.\run_froc_phase23_pipeline.ps1 -DataPath path/to/decoder_data.json -ModelName gpt2 -FrocEps 0.02
+```
+
+It validates the presence of key artifacts (`phase23_verification_report.md`, `transport_diagnostics.json`, and `threshold_invariance.csv`) for both modes.
+
+### Static consistency verification (no execution)
+
+The pipeline wiring has been statically verified in code without executing scripts in this environment.
+
+Verified alignment:
+- `README.md` commands and artifact expectations
+- `scripts/run_decoder_phase5.py` CLI flags and output writers
+- `utils/decoder_froc.py` strict/pragmatic mode logic and threshold invariance helper
+- `run_froc_phase23_pipeline.ps1` wrapper behavior and required artifact checks
+
+Teammate run-time validation checklist:
+1. Run `run_froc_phase23_pipeline.ps1` with dataset path and model name.
+2. Confirm both folders exist: `outputs/decoder_phase5/phase23_strict/` and `outputs/decoder_phase5/phase23_pragmatic/`.
+3. Confirm each folder contains:
+	- `phase23_verification_report.md`
+	- `transport_diagnostics.json`
+	- `threshold_invariance.csv`
+	- `metrics_before_after.csv`
+	- `roc_gap.csv`
+	- `thresholds.json`
+	- `summary.json`
 
 ## StereoSet FROC Script
 

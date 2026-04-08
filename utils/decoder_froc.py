@@ -277,6 +277,126 @@ def find_group_thresholds(y_true, y_score, group, target_tpr, target_fpr):
     return thresholds
 
 
+def _find_group_threshold_for_target(y_true, y_score, group, group_name, target_tpr, target_fpr):
+    mask = group == str(group_name)
+    fpr, tpr, candidate_thresholds = _safe_roc_curve(y_true[mask], y_score[mask])
+    distances = (tpr - float(target_tpr)) ** 2 + (fpr - float(target_fpr)) ** 2
+    best_idx = int(np.argmin(distances)) if distances.size else 0
+    best_threshold = candidate_thresholds[best_idx] if candidate_thresholds.size else 0.5
+    return _normalize_threshold(float(best_threshold), y_score[mask])
+
+
+def _safe_auc(y_true, y_score):
+    try:
+        return float(roc_auc_score(y_true, y_score))
+    except Exception:
+        return 0.5
+
+
+def find_group_thresholds_strict(y_true, y_score, group, target_tpr, target_fpr, eps=0.02, num_points=200):
+    """
+    Strict mode: build per-group targets from disadvantaged-group transport geometry,
+    then derive deterministic thresholds from those targets.
+
+    Returns:
+        thresholds: dict[group] = threshold
+        diagnostics: dict with mode and transport budget checks
+    """
+    y_true = np.asarray(y_true).astype(int)
+    y_score = np.asarray(y_score).astype(float)
+    group = _normalize_group_array(group)
+
+    unique_groups = np.unique(group)
+    thresholds = {}
+    diagnostics = {
+        "mode": "strict",
+        "eps": float(max(0.0, eps)),
+        "disadvantaged_group": None,
+        "group_transport": {},
+        "max_l1_after": 0.0,
+    }
+
+    if unique_groups.size == 0:
+        return thresholds, diagnostics
+
+    if unique_groups.size == 1:
+        only_group = str(unique_groups[0])
+        thresholds[only_group] = _find_group_threshold_for_target(
+            y_true,
+            y_score,
+            group,
+            only_group,
+            target_tpr,
+            target_fpr,
+        )
+        diagnostics["disadvantaged_group"] = only_group
+        diagnostics["group_transport"][only_group] = {
+            "auc": _safe_auc(y_true[group == only_group], y_score[group == only_group]),
+            "target_tpr": float(target_tpr),
+            "target_fpr": float(target_fpr),
+            "max_l1_after": 0.0,
+        }
+        return thresholds, diagnostics
+
+    auc_per_group = {}
+    roc_per_group = {}
+    common_fpr = np.linspace(0.0, 1.0, int(max(20, num_points)))
+
+    for group_name in unique_groups:
+        group_key = str(group_name)
+        mask = group == group_key
+        auc_per_group[group_key] = _safe_auc(y_true[mask], y_score[mask])
+        fpr, tpr, _ = _safe_roc_curve(y_true[mask], y_score[mask])
+        _, tpr_interp = interpolate_roc(fpr, tpr, num_points=common_fpr.size)
+        roc_per_group[group_key] = {
+            "fpr": common_fpr,
+            "tpr": tpr_interp,
+        }
+
+    disadvantaged_group = min(auc_per_group, key=auc_per_group.get)
+    diagnostics["disadvantaged_group"] = disadvantaged_group
+    eps = float(max(0.0, eps))
+
+    target_index = int(np.argmin(np.abs(common_fpr - float(target_fpr))))
+    disadvantaged_tpr_curve = roc_per_group[disadvantaged_group]["tpr"]
+
+    max_l1_after = 0.0
+    for group_name in unique_groups:
+        group_key = str(group_name)
+        this_tpr_curve = roc_per_group[group_key]["tpr"]
+
+        if group_key == disadvantaged_group:
+            transported_tpr_curve = this_tpr_curve.copy()
+        else:
+            diff = this_tpr_curve - disadvantaged_tpr_curve
+            transported_tpr_curve = disadvantaged_tpr_curve + np.clip(diff, -eps, eps)
+
+        transport_l1_per_point = np.abs(transported_tpr_curve - disadvantaged_tpr_curve)
+        group_max_l1_after = float(np.max(transport_l1_per_point)) if transport_l1_per_point.size else 0.0
+        max_l1_after = max(max_l1_after, group_max_l1_after)
+
+        target_tpr_group = float(transported_tpr_curve[target_index])
+        target_fpr_group = float(common_fpr[target_index])
+        thresholds[group_key] = _find_group_threshold_for_target(
+            y_true,
+            y_score,
+            group,
+            group_key,
+            target_tpr_group,
+            target_fpr_group,
+        )
+
+        diagnostics["group_transport"][group_key] = {
+            "auc": float(auc_per_group[group_key]),
+            "target_tpr": target_tpr_group,
+            "target_fpr": target_fpr_group,
+            "max_l1_after": group_max_l1_after,
+        }
+
+    diagnostics["max_l1_after"] = float(max_l1_after)
+    return thresholds, diagnostics
+
+
 def apply_group_thresholds(y_score, group, thresholds_per_group):
     """
     Returns:
@@ -338,7 +458,7 @@ def evaluate_metrics_after_froc(y_true, y_pred, y_score, group):
     return evaluate_metrics(y_true, y_pred, y_score, group)
 
 
-def froc_pipeline(results):
+def froc_pipeline(results, froc_mode="pragmatic", froc_eps=0.02, strict_num_points=200):
     """
     For each model:
         - compute global target
@@ -352,6 +472,7 @@ def froc_pipeline(results):
     """
     metrics_before_after = {}
     thresholds_per_model = {}
+    transport_diagnostics = {}
 
     for model_name, payload in results.items():
         y_true = np.asarray(payload["y_true"]).astype(int)
@@ -359,7 +480,33 @@ def froc_pipeline(results):
         group = _normalize_group_array(payload["group"])
 
         target_tpr, target_fpr = compute_global_operating_point(y_true, y_score)
-        thresholds = find_group_thresholds(y_true, y_score, group, target_tpr, target_fpr)
+        if froc_mode == "strict":
+            thresholds, diagnostics = find_group_thresholds_strict(
+                y_true,
+                y_score,
+                group,
+                target_tpr,
+                target_fpr,
+                eps=froc_eps,
+                num_points=strict_num_points,
+            )
+        else:
+            thresholds = find_group_thresholds(y_true, y_score, group, target_tpr, target_fpr)
+            diagnostics = {
+                "mode": "pragmatic",
+                "eps": float(froc_eps),
+                "disadvantaged_group": None,
+                "group_transport": {
+                    str(group_name): {
+                        "auc": _safe_auc(y_true[group == str(group_name)], y_score[group == str(group_name)]),
+                        "target_tpr": float(target_tpr),
+                        "target_fpr": float(target_fpr),
+                        "max_l1_after": float("nan"),
+                    }
+                    for group_name in np.unique(group)
+                },
+                "max_l1_after": float("nan"),
+            }
 
         y_pred_before = (y_score >= 0.5).astype(int)
         y_pred_after = apply_group_thresholds(y_score, group, thresholds)
@@ -377,14 +524,16 @@ def froc_pipeline(results):
             "n_samples": int(len(y_true)),
         }
         thresholds_per_model[model_name] = {
+            "mode": str(froc_mode),
             "global_operating_point": {
                 "target_tpr": float(target_tpr),
                 "target_fpr": float(target_fpr),
             },
             "thresholds": thresholds,
         }
+        transport_diagnostics[model_name] = diagnostics
 
-    return metrics_before_after, thresholds_per_model
+    return metrics_before_after, thresholds_per_model, transport_diagnostics
 
 
 def interpolate_roc(fpr, tpr, num_points=100):
@@ -621,4 +770,34 @@ def flatten_roc_gap_for_csv(roc_gap_before, roc_gap_after):
                 "roc_gap_after": float(roc_gap_after[model_name]),
             }
         )
+    return pd.DataFrame(rows)
+
+
+def threshold_invariance_check(y_true, y_score, group, thresholds, deltas=None):
+    """Evaluate metric stability under uniform threshold perturbation."""
+    if deltas is None:
+        deltas = [-0.02, -0.01, 0.0, 0.01, 0.02]
+
+    y_true = np.asarray(y_true).astype(int)
+    y_score = np.asarray(y_score).astype(float)
+    group = _normalize_group_array(group)
+
+    rows = []
+    for delta in deltas:
+        shifted = {str(g): float(t) + float(delta) for g, t in thresholds.items()}
+        y_pred = apply_group_thresholds(y_score, group, shifted)
+        metrics = evaluate_metrics(y_true, y_pred, y_score, group)
+        roc_gap = compute_roc_gap(y_true, y_pred, group)
+        rows.append(
+            {
+                "delta": float(delta),
+                "accuracy": float(metrics["accuracy"]),
+                "f1": float(metrics["f1"]),
+                "auc": float(metrics["auc"]),
+                "dpd": float(metrics["dpd"]),
+                "eod": float(metrics["eod"]),
+                "roc_gap": float(roc_gap),
+            }
+        )
+
     return pd.DataFrame(rows)
