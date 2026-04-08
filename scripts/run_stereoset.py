@@ -6,10 +6,12 @@ import os
 from tqdm import tqdm
 
 from utils.load_model import load_model
+from gsq_quant.gsq_load import load_gsq_model
 
 
 def get_logprob(model, tokenizer, text):
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
+    device = next(model.parameters()).device
+    inputs = tokenizer(text, return_tensors="pt").to(device)
     with torch.no_grad():
         outputs = model(**inputs, labels=inputs["input_ids"])
     # Return total sequence log-probability
@@ -22,7 +24,8 @@ def main():
     parser.add_argument("--dataset_path", default="benchmark_datasets/stereo_set/stereo_set.json")
     args = parser.parse_args()
 
-    model, tokenizer = load_model(args.model_path)
+    # model, tokenizer = load_model(args.model_path)
+    model, tokenizer, metadata = load_gsq_model(args.model_path)
     data = json.load(open(args.dataset_path))
 
     stereo_scores = []

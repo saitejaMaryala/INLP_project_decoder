@@ -3,20 +3,24 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from awq import AutoAWQForCausalLM
 
 
-def load_model(model_path):
-    if "AWQ" in model_path:
+def load_model(model_path, load_type="AWQ"):
+
+    if load_type == "AWQ":
+        print("Loading AWQ model")
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
         model = AutoAWQForCausalLM.from_quantized(
             model_path,
             fuse_layers=True,
             trust_remote_code=True,
-            device_map="auto"          # spreads across all visible GPUs
+            device_map={"":0}          
         )
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        
     else:
+        print("Loading standard model")
         tokenizer = AutoTokenizer.from_pretrained(model_path)
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
-            device_map="auto",         # spreads layers across all 4 GPUs
+            device_map="auto",        
             torch_dtype=torch.float16,
             trust_remote_code=True,
         )
@@ -25,7 +29,7 @@ def load_model(model_path):
     return model, tokenizer
 
 if __name__ == "__main__":
-    model_path = "/home/sai.teja/gsq_decoder/hf_models/Llama-3.1-8B-Instruct"
+    model_path = "/home/sai.teja/gsq_decoder/hf_models/Meta-Llama-3.1-8B-Instruct-AWQ-INT4"
     model, tokenizer = load_model(model_path)
     print("Model loaded successfully")
 
@@ -47,4 +51,5 @@ if __name__ == "__main__":
         )
 
     generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    print("Generated text: ")
     print(generated_text)

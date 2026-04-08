@@ -18,12 +18,12 @@ echo "Starting evaluation for: $MODEL_PATH"
 echo "Available GPUs: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 echo "==========================================="
 
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 echo -e "\n[1/4] Evaluating on MMLU..."
 PYTHONPATH=. python3 scripts/run_mmlu.py \
     --model_path "$MODEL_PATH" \
-    --batch_size 16          # lower to 16 if OOM, raise to 64 if VRAM allows
+    --batch_size 4          # lower to 16 if OOM, raise to 64 if VRAM allows
 
 echo -e "\n[2/4] Evaluating on StereoSet..."
 PYTHONPATH=. python3 scripts/run_stereoset.py --model_path "$MODEL_PATH"

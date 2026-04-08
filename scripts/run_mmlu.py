@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from transformers import DataCollatorWithPadding
 
 from utils.load_model import load_model
-
+from gsq_quant.gsq_load import load_gsq_model
 
 def build_prompts(sample):
     """Build the base prompt and all 4 choice-appended prompts for one sample."""
@@ -44,8 +44,12 @@ def score_choices_batched(model, tokenizer, choice_texts, batch_size=8):
             max_length=512,
         )
 
-        input_ids = enc["input_ids"].to(model.device)
-        attention_mask = enc["attention_mask"].to(model.device)
+        # input_ids = enc["input_ids"].to(model.device)
+        # attention_mask = enc["attention_mask"].to(model.device)
+
+        device = next(model.parameters()).device
+        input_ids = enc["input_ids"].to(device)
+        attention_mask = enc["attention_mask"].to(device)
 
         with torch.no_grad():
             outputs = model(
@@ -137,7 +141,8 @@ def main():
                         help="Samples per batch (tune based on VRAM)")
     args = parser.parse_args()
 
-    model, tokenizer = load_model(args.model_path)
+    # model, tokenizer = load_model(args.model_path)
+    model, tokenizer, metadata = load_gsq_model(args.model_path)
 
     # Fix padding token fo LLAMA 
     if tokenizer.pad_token is None:

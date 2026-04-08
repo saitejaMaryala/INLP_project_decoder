@@ -7,9 +7,11 @@ import pandas as pd
 from tqdm import tqdm
 
 from utils.load_model import load_model
+from gsq_quant.gsq_load import load_gsq_model
 
 def get_logprob(model, tokenizer, text):
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
+    device = next(model.parameters()).device
+    inputs = tokenizer(text, return_tensors="pt").to(device)
     with torch.no_grad():
         outputs = model(**inputs, labels=inputs["input_ids"])
     return -outputs.loss.item() * inputs["input_ids"].shape[1]
@@ -20,7 +22,8 @@ def main():
     parser.add_argument("--dataset_path", default="benchmark_datasets/bbq")
     args = parser.parse_args()
 
-    model, tokenizer = load_model(args.model_path)
+    # model, tokenizer = load_model(args.model_path)
+    model, tokenizer, metadata = load_gsq_model(args.model_path)
 
     # Load metadata
     meta_df = pd.read_csv(os.path.join(args.dataset_path, "additional_metadata.csv"))
@@ -54,7 +57,11 @@ def main():
             target_row = meta_df[(meta_df["category"] == cat) & (meta_df["example_id"] == eid)]
             if target_row.empty:
                 continue
-            target_loc = int(target_row.iloc[0]["target_loc"])
+            
+            target_loc_val = target_row.iloc[0]["target_loc"]
+            if pd.isna(target_loc_val):
+                continue
+            target_loc = int(target_loc_val)
             
             ans = [data["ans0"], data["ans1"], data["ans2"]]
             

@@ -1,0 +1,17 @@
+{
+    "ambiguous_bias": 0.06741409435061153,
+    "disambiguated_bias": 0.026798718322167202,
+    "total_samples": 13736,
+    "counts": {
+        "ambig": {
+            "pro": 3656,
+            "anti": 3193,
+            "unbiased": 19
+        },
+        "disambig": {
+            "pro": 3525,
+            "anti": 3341,
+            "unbiased": 2
+        }
+    }
+}

@@ -20,12 +20,11 @@ echo "==========================================="
 echo "2. Downloading Models from Hugging Face..."
 echo "==========================================="
 
-# Download Base Model (skip original FP16 weights)
-echo "Downloading Base Model: $BASE_MODEL_ID"
-hf download $BASE_MODEL_ID --repo-type model --local-dir $BASE_LOCAL_PATH --exclude "original/*"
+# # Download Base Model (skip original FP16 weights)
+# echo "Downloading Base Model: $BASE_MODEL_ID"
+# hf download $BASE_MODEL_ID --repo-type model --local-dir $BASE_LOCAL_PATH --exclude "original/*"
 
 # Download AWQ Model (skip original FP16 weights if present)
-
 echo "Downloading AWQ Model: $AWQ_MODEL_ID"
 hf download $AWQ_MODEL_ID \
    --repo-type model \

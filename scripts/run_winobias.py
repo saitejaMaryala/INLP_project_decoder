@@ -7,6 +7,7 @@ import numpy as np
 from tqdm import tqdm
 
 from utils.load_model import load_model
+from gsq_quant.gsq_load import load_gsq_model
 
 occupations = [
     "janitor", "accountant", "chief", "assistant", "carpenter", "teacher", "lawyer",
@@ -23,7 +24,8 @@ def load_file(path):
     return lines
 
 def get_logprob(model, tokenizer, text):
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
+    device = next(model.parameters()).device
+    inputs = tokenizer(text, return_tensors="pt").to(device)
     with torch.no_grad():
         outputs = model(**inputs, labels=inputs["input_ids"])
     return -outputs.loss.item() * inputs["input_ids"].shape[1]
@@ -89,7 +91,8 @@ def main():
     parser.add_argument("--dataset_dir", default="benchmark_datasets/wino_bias")
     args = parser.parse_args()
 
-    model, tokenizer = load_model(args.model_path)
+    # model, tokenizer = load_model(args.model_path)
+    model, tokenizer, metadata = load_gsq_model(args.model_path)
 
     pro1 = load_file(f"{args.dataset_dir}/pro_stereotyped_type1.test")
     pro2 = load_file(f"{args.dataset_dir}/pro_stereotyped_type2.test")
