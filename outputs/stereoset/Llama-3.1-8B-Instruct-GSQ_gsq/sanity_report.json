@@ -1,0 +1,29 @@
+{
+  "num_pairs": 400,
+  "num_binary_samples": 800,
+  "num_groups": 19,
+  "group_counts": {
+    "Afghanistan": 50,
+    "Cameroon": 42,
+    "Cape Verde": 32,
+    "Crimean": 52,
+    "Ethiopia": 46,
+    "Ethiopian": 38,
+    "Ghanaian": 40,
+    "Hispanic": 40,
+    "Russian": 46,
+    "chess player": 46,
+    "civil servant": 40,
+    "herself": 32,
+    "mother": 46,
+    "mover": 40,
+    "musician": 42,
+    "physicist": 42,
+    "psychologist": 46,
+    "schoolgirl": 40,
+    "tailor": 40
+  },
+  "smoke_test": false,
+  "epsilon": 0.05,
+  "k": 100
+}

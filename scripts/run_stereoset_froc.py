@@ -25,9 +25,11 @@ from utils.decoder_froc import (
     evaluate_metrics,
     flatten_metrics_for_csv,
     flatten_roc_gap_for_csv,
-    load_decoder_model,
-    quantize_model_int8,
 )
+
+from utils.load_model import load_model
+from gsq_quant.gsq_load import load_gsq_model
+
 
 
 def get_logprob(model, tokenizer, text):
@@ -304,6 +306,7 @@ def plot_roc_curves_by_group(y_true, y_score, group, title, save_path):
 def main():
     parser = argparse.ArgumentParser(description="StereoSet FROC runner with geometric ROC transport")
     parser.add_argument("--model_name", default="gpt2")
+    parser.add_argument("--model_type", default="standard", choices=["standard", "awq", "gsq"], help="Type of model to load")
     parser.add_argument("--dataset_path", default="benchmark_datasets/stereo_set/stereo_set.json")
     parser.add_argument("--subset", default="intrasentence", choices=["intrasentence", "intersentence"])
     parser.add_argument("--group_field", default="target", choices=["target", "bias_type"])
@@ -315,7 +318,7 @@ def main():
     parser.add_argument("--smoke_samples", type=int, default=20, help="Number of StereoSet pairs for smoke test")
     parser.add_argument("--use_context", action="store_true")
     parser.add_argument("--disadvantaged_group", default=None)
-    parser.add_argument("--output_dir", default="outputs/decoder_phase5/stereoset")
+    parser.add_argument("--output_dir", default="outputs/stereoset")
     args = parser.parse_args()
 
     if args.smoke_test:
@@ -323,7 +326,9 @@ def main():
         if args.max_samples <= 0:
             raise ValueError("smoke_samples must be positive.")
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    model_basename = os.path.basename(os.path.normpath(args.model_name))
+    run_output_dir = os.path.join(args.output_dir, f"{model_basename}_{args.model_type}")
+    os.makedirs(run_output_dir, exist_ok=True)
 
     with open(args.dataset_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -338,25 +343,18 @@ def main():
     if len(records) == 0:
         raise ValueError("No valid stereotype/anti-stereotype pairs found in selected StereoSet subset.")
 
-    tokenizer_fp32, model_fp32 = load_decoder_model(args.model_name, device=args.device, torch_dtype=torch.float32)
-    y_true, y_score_fp32, group = score_records(model_fp32, tokenizer_fp32, records)
+    if args.model_type == "gsq":
+        model, tokenizer, metadata = load_gsq_model(args.model_name, device_map="auto")
+    elif args.model_type == "awq":
+        model, tokenizer = load_model(args.model_name, load_type="AWQ")
+    else:
+        model, tokenizer = load_model(args.model_name, load_type="standard")
+
+    y_true, y_score, group = score_records(model, tokenizer, records)
 
     results = {
-        "fp32": {"y_true": y_true, "y_score": y_score_fp32, "group": group}
+        args.model_type: {"y_true": y_true, "y_score": y_score, "group": group}
     }
-
-    if args.device == "cuda" and torch.cuda.is_available():
-        try:
-            tokenizer_fp16, model_fp16 = load_decoder_model(args.model_name, device="cuda", torch_dtype=torch.float16)
-            _, y_score_fp16, _ = score_records(model_fp16, tokenizer_fp16, records)
-            results["fp16"] = {"y_true": y_true, "y_score": y_score_fp16, "group": group}
-        except Exception as exc:
-            warnings.warn(f"FP16 variant skipped: {exc}")
-
-    tokenizer_int8, model_int8 = load_decoder_model(args.model_name, device="cpu", torch_dtype=torch.float32)
-    model_int8 = quantize_model_int8(model_int8)
-    _, y_score_int8, _ = score_records(model_int8, tokenizer_int8, records)
-    results["int8"] = {"y_true": y_true, "y_score": y_score_int8, "group": group}
 
     metrics_before_after = {}
     thresholds_by_model = {}
@@ -394,23 +392,23 @@ def main():
             y_score_m,
             group_m,
             title=f"StereoSet ROC by Group ({model_key}, before FROC)",
-            save_path=os.path.join(args.output_dir, f"roc_curves_{model_key}_before.png"),
+            save_path=os.path.join(run_output_dir, f"roc_curves_{model_key}_before.png"),
         )
         plot_roc_curves_by_group(
             y_true_m,
             y_pred_after,
             group_m,
             title=f"StereoSet ROC by Group ({model_key}, after FROC)",
-            save_path=os.path.join(args.output_dir, f"roc_curves_{model_key}_after.png"),
+            save_path=os.path.join(run_output_dir, f"roc_curves_{model_key}_after.png"),
         )
 
     metrics_df = flatten_metrics_for_csv(metrics_before_after)
     roc_gap_df = flatten_roc_gap_for_csv(roc_gap_before, roc_gap_after)
 
-    metrics_df.to_csv(os.path.join(args.output_dir, "metrics_before_after.csv"), index=False)
-    roc_gap_df.to_csv(os.path.join(args.output_dir, "roc_gap.csv"), index=False)
+    metrics_df.to_csv(os.path.join(run_output_dir, "metrics_before_after.csv"), index=False)
+    roc_gap_df.to_csv(os.path.join(run_output_dir, "roc_gap.csv"), index=False)
 
-    with open(os.path.join(args.output_dir, "thresholds.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(run_output_dir, "thresholds.json"), "w", encoding="utf-8") as f:
         json.dump(thresholds_by_model, f, indent=2)
 
     summary = {
@@ -420,7 +418,7 @@ def main():
         "metrics_before_after": metrics_df.to_dict(orient="records"),
         "roc_gap": roc_gap_df.to_dict(orient="records"),
     }
-    with open(os.path.join(args.output_dir, "summary.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(run_output_dir, "summary.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
     sanity = {
@@ -432,10 +430,10 @@ def main():
         "epsilon": float(args.epsilon),
         "k": int(args.k),
     }
-    with open(os.path.join(args.output_dir, "sanity_report.json"), "w", encoding="utf-8") as f:
+    with open(os.path.join(run_output_dir, "sanity_report.json"), "w", encoding="utf-8") as f:
         json.dump(sanity, f, indent=2)
 
-    print(f"StereoSet FROC complete. Outputs written to: {args.output_dir}")
+    print(f"StereoSet FROC complete. Outputs written to: {run_output_dir}")
 
 
 if __name__ == "__main__":

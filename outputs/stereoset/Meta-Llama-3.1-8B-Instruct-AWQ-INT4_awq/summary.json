@@ -1,0 +1,40 @@
+{
+  "num_pairs": 400,
+  "smoke_test": false,
+  "models": [
+    "awq"
+  ],
+  "metrics_before_after": [
+    {
+      "model": "awq",
+      "phase": "before",
+      "n_samples": 800,
+      "target_tpr": NaN,
+      "target_fpr": NaN,
+      "accuracy": 0.655,
+      "f1": 0.655,
+      "auc": 0.7024625,
+      "dpd": 0.0,
+      "eod": 0.3956043956043956
+    },
+    {
+      "model": "awq",
+      "phase": "after",
+      "n_samples": 800,
+      "target_tpr": NaN,
+      "target_fpr": NaN,
+      "accuracy": 0.5,
+      "f1": 0.0,
+      "auc": 0.7024625,
+      "dpd": 0.0,
+      "eod": 0.0
+    }
+  ],
+  "roc_gap": [
+    {
+      "model": "awq",
+      "roc_gap_before": 0.04175657459452975,
+      "roc_gap_after": 0.0
+    }
+  ]
+}
