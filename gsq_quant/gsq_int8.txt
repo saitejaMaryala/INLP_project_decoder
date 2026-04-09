@@ -1,0 +1,14 @@
+Token indices sequence length is longer than the specified maximum sequence length for this model (2436214 > 131072). Running this sequence through the model will result in indexing errors
+[GSQ] Prepared 50 calibration chunks of length 512
+[GSQ] Running 50 calibration passes …
+  … 10/50 samples done
+  … 20/50 samples done
+  … 30/50 samples done
+  … 40/50 samples done
+  … 50/50 samples done
+[GSQ] Computed sensitivity scores for 225 Linear layers
+[GSQ] Bit-width assignment: 56 layers → INT8, 169 layers → INT4
+[GSQ] Collected INT8 tensors for 225 layers (model FP16 weights unchanged)
+Writing model shards: 100%|█████████████████████████████████████████████████████████████████████████████| 1/1 [00:21<00:00, 21.60s/it]
+[GSQ] Saved INT8 tensors → hf_models/Llama-3.1-8B-Instruct-GSQ-INT8/gsq_int8_weights.pt
+[GSQ] Saved [real INT8 (FP16 checkpoint + gsq_int8_weights.pt)] model → hf_models/Llama-3.1-8B-Instruct-GSQ-INT8

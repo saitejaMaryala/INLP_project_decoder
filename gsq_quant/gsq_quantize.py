@@ -1,33 +1,44 @@
 """
 Gradient-Sensitivity Quantization (GSQ)
 ----------------------------------------
-Fast, targeted mixed-precision quantization using gradient magnitudes
-to identify sensitive layers — no optimization loop required.
+Saves a fully self-contained checkpoint.
 
-Pipeline:
-  1. Forward + backward pass on ~50 calibration samples
-  2. Score each Linear layer by gradient magnitude
-  3. Assign INT8 to top-k% sensitive layers, INT4 to the rest
-  4. One-shot direct rounding quantization
-  5. Save quantized weights + sensitivity metadata
+What is saved  (output_path/)
+──────────────────────────────
+  config.json          ~  a few KB   (HF architecture definition only, NO weights)
+  tokenizer files      ~  1 MB
+  gsq_weights.pt       ~  4-5 GB     (ALL tensors needed to run the model)
+    ├─ quantized Linear layers  → int8 weight + fp16 scale
+    └─ everything else          → fp16  (embeddings, norms, lm_head …)
+  gsq_metadata.json    ~  a few MB   (sensitivity scores, bit assignments)
+
+At load time
+────────────
+  1. Build empty model skeleton from config.json  (zero RAM for weights)
+  2. Load gsq_weights.pt
+  3. Swap Linear → Int8Linear using the int8 tensors
+  4. Load remaining fp16 tensors into the skeleton
+  → Original 16 GB model is NEVER needed again.
+
+Size targets for Llama-3.1-8B
+──────────────────────────────
+  robust_bits=4, sensitive_bits=8  →  ~4.5 GB  (default, mixed)
+  robust_bits=4, sensitive_bits=4  →  ~4.0 GB  (all INT4)
+  robust_bits=8, sensitive_bits=8  →  ~7.0 GB  (all INT8)
 """
 
-import os
-import json
-import torch
-import torch.nn as nn
+import os, json, torch, torch.nn as nn
 from pathlib import Path
 from dataclasses import dataclass, asdict
-from typing import Optional
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
 from datasets import load_dataset
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # Config
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
 class GSQConfig:
@@ -35,7 +46,7 @@ class GSQConfig:
     output_path: str
     n_calibration_samples: int = 50
     max_seq_len: int = 512
-    sensitive_ratio: float = 0.25          # top 25% layers → INT8
+    sensitive_ratio: float = 0.25   # top fraction → sensitive_bits, rest → robust_bits
     sensitive_bits: int = 8
     robust_bits: int = 4
     dataset_name: str = "wikitext"
@@ -44,274 +55,213 @@ class GSQConfig:
     calibration_seed: int = 42
 
 
-# ---------------------------------------------------------------------------
-# Step 1: Calibration data
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 1 — Calibration data
+# ─────────────────────────────────────────────────────────────────────────────
 
-def get_calibration_tokens(
-    tokenizer,
-    cfg: GSQConfig,
-    device: torch.device,
-) -> list[torch.Tensor]:
-    """
-    Load a small slice of wikitext-2 and tokenize into fixed-length chunks.
-    Returns a list of (1, seq_len) token tensors on `device`.
-    """
-    ds = load_dataset(cfg.dataset_name, cfg.dataset_config, split=cfg.dataset_split)
-    text = "\n\n".join(ds["text"])
-
+def get_calibration_tokens(tokenizer, cfg, device):
+    ds      = load_dataset(cfg.dataset_name, cfg.dataset_config, split=cfg.dataset_split)
+    text    = "\n\n".join(ds["text"])
     torch.manual_seed(cfg.calibration_seed)
-    enc = tokenizer(text, return_tensors="pt")
-    all_ids = enc["input_ids"][0]           # (total_tokens,)
-
-    n_tok = cfg.max_seq_len
-    max_start = len(all_ids) - n_tok
-    starts = torch.randperm(max_start)[: cfg.n_calibration_samples]
-
-    samples = []
-    for s in starts:
-        chunk = all_ids[s : s + n_tok].unsqueeze(0).to(device)
-        samples.append(chunk)
-
-    print(f"[GSQ] Prepared {len(samples)} calibration chunks of length {n_tok}")
+    all_ids = tokenizer(text, return_tensors="pt")["input_ids"][0]
+    starts  = torch.randperm(len(all_ids) - cfg.max_seq_len)[:cfg.n_calibration_samples]
+    samples = [all_ids[s: s + cfg.max_seq_len].unsqueeze(0).to(device) for s in starts]
+    print(f"[GSQ] {len(samples)} calibration chunks × {cfg.max_seq_len} tokens")
     return samples
 
 
-# ---------------------------------------------------------------------------
-# Step 2: Gradient-magnitude sensitivity map
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 2 — Sensitivity map
+# ─────────────────────────────────────────────────────────────────────────────
 
-def compute_sensitivity_map(
-    model: nn.Module,
-    samples: list[torch.Tensor],
-    cfg: GSQConfig,
-) -> dict[str, float]:
-    """
-    Run forward+backward on calibration samples.
-    For every Linear layer, accumulate the mean absolute gradient of its weight.
-    Returns {layer_name: sensitivity_score}.
-    """
-    # Temporarily enable gradients
+def compute_sensitivity_map(model, samples, cfg):
     for p in model.parameters():
         p.requires_grad_(True)
 
-    # Accumulate |grad| sums and counts
-    grad_accum: dict[str, torch.Tensor] = {}
-
-    print(f"[GSQ] Running {len(samples)} calibration passes …")
-    for i, input_ids in enumerate(samples):
+    accum = {}
+    print(f"[GSQ] {len(samples)} calibration passes …")
+    for i, ids in enumerate(samples):
         model.zero_grad()
-
-        # Teacher-forcing: labels = input_ids shifted inside the model
-        outputs = model(input_ids=input_ids, labels=input_ids)
-        loss = outputs.loss
-        loss.backward()
-
-        for name, module in model.named_modules():
-            if isinstance(module, nn.Linear) and module.weight.grad is not None:
-                score = module.weight.grad.abs().mean().item()
-                grad_accum[name] = grad_accum.get(name, 0.0) + score
-
+        model(input_ids=ids, labels=ids).loss.backward()
+        for name, mod in model.named_modules():
+            if isinstance(mod, nn.Linear) and mod.weight.grad is not None:
+                accum[name] = accum.get(name, 0.0) + mod.weight.grad.abs().mean().item()
         if (i + 1) % 10 == 0:
-            print(f"  … {i + 1}/{len(samples)} samples done")
+            print(f"  {i+1}/{len(samples)}")
 
     model.zero_grad()
-    # Freeze again
     for p in model.parameters():
         p.requires_grad_(False)
 
-    # Average over samples
-    n = len(samples)
-    sensitivity_map = {name: total / n for name, total in grad_accum.items()}
-
-    print(f"[GSQ] Computed sensitivity scores for {len(sensitivity_map)} Linear layers")
-    return sensitivity_map
+    sens = {k: v / len(samples) for k, v in accum.items()}
+    print(f"[GSQ] Sensitivity computed for {len(sens)} layers")
+    return sens
 
 
-# ---------------------------------------------------------------------------
-# Step 3: Assign bit-widths
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 3 — Bit-width assignment
+# ─────────────────────────────────────────────────────────────────────────────
 
-def assign_bit_widths(
-    sensitivity_map: dict[str, float],
-    cfg: GSQConfig,
-) -> dict[str, int]:
-    """
-    Rank layers by sensitivity score (descending).
-    Top `sensitive_ratio` fraction → INT8, rest → INT4.
-    Returns {layer_name: n_bits}.
-    """
-    ranked = sorted(sensitivity_map.items(), key=lambda x: x[1], reverse=True)
+def assign_bit_widths(sensitivity_map, cfg):
+    ranked      = sorted(sensitivity_map.items(), key=lambda x: x[1], reverse=True)
     n_sensitive = max(1, int(len(ranked) * cfg.sensitive_ratio))
-
-    bit_assignment: dict[str, int] = {}
-    for rank, (name, score) in enumerate(ranked):
-        bits = cfg.sensitive_bits if rank < n_sensitive else cfg.robust_bits
-        bit_assignment[name] = bits
-
-    n8 = sum(1 for b in bit_assignment.values() if b == cfg.sensitive_bits)
-    n4 = len(bit_assignment) - n8
-    print(f"[GSQ] Bit-width assignment: {n8} layers → INT{cfg.sensitive_bits}, "
-          f"{n4} layers → INT{cfg.robust_bits}")
-    return bit_assignment
+    bits = {n: (cfg.sensitive_bits if i < n_sensitive else cfg.robust_bits)
+            for i, (n, _) in enumerate(ranked)}
+    n8 = sum(1 for b in bits.values() if b == cfg.sensitive_bits)
+    print(f"[GSQ] {n8} → INT{cfg.sensitive_bits}  |  {len(bits)-n8} → INT{cfg.robust_bits}")
+    return bits
 
 
-# ---------------------------------------------------------------------------
-# Step 4: One-shot quantization helpers
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 4 — Build the unified weight store
+# ─────────────────────────────────────────────────────────────────────────────
 
-def quantize_tensor(tensor: torch.Tensor, n_bits: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Symmetric per-channel (output-channel) min-max quantization.
-    Returns (quantized_weight_int8, scale, zero_point=0).
-
-    We store everything as int8 regardless of n_bits to keep it simple;
-    the scale encodes the effective dynamic range for 4-bit or 8-bit.
-    """
+def quantize_tensor(w: torch.Tensor, n_bits: int):
+    qmax = (2 ** (n_bits - 1)) - 1
     qmin = -(2 ** (n_bits - 1))
-    qmax = 2 ** (n_bits - 1) - 1
+    wf = w.float()
 
-    # Per output-channel scale
-    w = tensor.float()
-    abs_max = w.abs().max(dim=1, keepdim=True).values.clamp(min=1e-8)
-    scale = abs_max / qmax                          # (out_channels, 1)
+    # ROW-wise scaling: one scale per output neuron [out_features, 1]
+    amax = wf.abs().amax(dim=1, keepdim=True).clamp(min=1e-8)
+    scale = amax / qmax
+    w_int = torch.round(wf / scale).clamp(qmin, qmax).to(torch.int8)
 
-    w_quant = (w / scale).round().clamp(qmin, qmax).to(torch.int8)
-    return w_quant, scale.squeeze(1).half(), torch.zeros(tensor.shape[0], dtype=torch.int8)
-
-
-def dequantize_tensor(
-    w_int: torch.Tensor,
-    scale: torch.Tensor,
-    zero_point: torch.Tensor,
-    original_dtype: torch.dtype = torch.float16,
-) -> torch.Tensor:
-    """Reconstruct FP16 weights from quantized representation."""
-    w = w_int.float() * scale.float().unsqueeze(1)
-    return w.to(original_dtype)
+    # Save scale as [out_features] — squeeze the keepdim
+    return w_int, scale.squeeze(1).half()
 
 
-# ---------------------------------------------------------------------------
-# Step 5: Apply quantization to model in-place
-# ---------------------------------------------------------------------------
-
-def apply_gsq_quantization(
-    model: nn.Module,
-    bit_assignment: dict[str, int],
-) -> dict[str, dict]:
+def build_weight_store(model, bit_assignment):
     """
-    Walk every Linear layer in `model`.
-    - If it's in bit_assignment: quantize → dequantize (simulate quant),
-      store quant metadata in a side dict.
-    - Mutates model weights in-place (replaces with reconstructed FP16).
-    Returns quant_state dict for saving.
+    Returns a single dict with every tensor the model needs:
+
+    For each quantized Linear  → key = layer name (e.g. "model.layers.0.self_attn.q_proj")
+      { "quantized": True, "bits": 8, "w": int8, "s": fp16, "b": fp16|None }
+
+    For everything else        → key = full state_dict key (e.g. "model.embed_tokens.weight")
+      { "quantized": False, "data": fp16 }
     """
-    quant_state: dict[str, dict] = {}
+    store = {}
 
-    for name, module in model.named_modules():
-        if not isinstance(module, nn.Linear):
+    # Set of layer names (not state_dict keys) that will be quantized
+    quant_layer_names = {
+        name for name, mod in model.named_modules()
+        if isinstance(mod, nn.Linear) and name in bit_assignment
+    }
+
+    # Quantized layers
+    for name, mod in model.named_modules():
+        if name not in quant_layer_names:
             continue
-        if name not in bit_assignment:
+        n_bits        = bit_assignment[name]
+        w_int8, scale = quantize_tensor(mod.weight.data, n_bits)
+        bias          = mod.bias.data.cpu().half() if mod.bias is not None else None
+        store[name]   = {"quantized": True, "bits": n_bits,
+                         "w": w_int8.cpu(), "s": scale.cpu(), "b": bias}
+
+    # State-dict keys that belong to quantized layers (skip — already stored above)
+    skip_keys = set()
+    for name in quant_layer_names:
+        skip_keys.add(name + ".weight")
+        skip_keys.add(name + ".bias")
+
+    # Everything else (embeddings, norms, lm_head if not quantized, …)
+    for key, tensor in model.state_dict().items():
+        if key in skip_keys:
             continue
-
-        n_bits = bit_assignment[name]
-        orig_dtype = module.weight.dtype
-        w = module.weight.data
-
-        w_int, scale, zero_point = quantize_tensor(w, n_bits)
-        w_reconstructed = dequantize_tensor(w_int, scale, zero_point, orig_dtype)
-
-        module.weight.data = w_reconstructed
-
-        quant_state[name] = {
-            "n_bits": n_bits,
-            "scale": scale.cpu().tolist(),
-            "zero_point": zero_point.cpu().tolist(),
-            "shape": list(w.shape),
+        store[key] = {
+            "quantized": False,
+            "data": tensor.cpu().half() if tensor.is_floating_point() else tensor.cpu(),
         }
 
-    print(f"[GSQ] Quantized {len(quant_state)} layers in-place (simulated quant)")
-    return quant_state
+    n_q   = sum(1 for v in store.values() if v["quantized"])
+    n_fp  = len(store) - n_q
+    n_bytes = sum(
+        (v["w"].numel() + v["s"].numel() * 2 + (v["b"].numel() * 2 if v["b"] is not None else 0))
+        if v["quantized"] else v["data"].numel() * (1 if not v["data"].is_floating_point() else 2)
+        for v in store.values()
+    )
+    print(f"[GSQ] Store: {n_q} quantized, {n_fp} fp16 tensors — "
+          f"estimated {n_bytes/1e9:.2f} GB")
+    return store
 
 
-# ---------------------------------------------------------------------------
-# Step 6: Save
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 5 — Save (architecture config only + weight store + tokenizer)
+# ─────────────────────────────────────────────────────────────────────────────
 
-def save_gsq_model(
-    model: nn.Module,
-    tokenizer,
-    quant_state: dict,
-    sensitivity_map: dict[str, float],
-    bit_assignment: dict[str, int],
-    cfg: GSQConfig,
-) -> None:
+def save_gsq_checkpoint(tokenizer, hf_config, weight_store,
+                        sensitivity_map, bit_assignment, cfg):
     out = Path(cfg.output_path)
     out.mkdir(parents=True, exist_ok=True)
 
-    # Save model weights + tokenizer
-    model.save_pretrained(str(out))
+    # Architecture definition only — a few KB of JSON, zero weights
+    hf_config.save_pretrained(str(out))
+
+    # Tokenizer
     tokenizer.save_pretrained(str(out))
 
-    # Save GSQ metadata
-    metadata = {
-        "quantization_method": "GSQ",
-        "config": asdict(cfg),
-        "sensitivity_map": {k: float(v) for k, v in sensitivity_map.items()},
-        "bit_assignment": bit_assignment,
-        "quant_state": quant_state,
-    }
+    # All weights in one file
+    torch.save(weight_store, out / "gsq_weights.pt")
+
+    # Metadata
     with open(out / "gsq_metadata.json", "w") as f:
-        json.dump(metadata, f, indent=2)
+        json.dump({
+            "quantization_method": "GSQ",
+            "config": asdict(cfg),
+            "sensitivity_map": {k: float(v) for k, v in sensitivity_map.items()},
+            "bit_assignment": bit_assignment,
+        }, f, indent=2)
 
-    print(f"[GSQ] Saved quantized model + metadata → {out}")
+    size_gb = (out / "gsq_weights.pt").stat().st_size / 1e9
+    print(f"[GSQ] gsq_weights.pt   : {size_gb:.2f} GB")
+    print(f"[GSQ] config.json      : architecture only, no weights")
+    print(f"[GSQ] Checkpoint → {out}")
 
 
-# ---------------------------------------------------------------------------
-# Main pipeline
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Main
+# ─────────────────────────────────────────────────────────────────────────────
 
-def run_gsq(cfg: GSQConfig) -> None:
+def run_gsq(cfg: GSQConfig):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[GSQ] Using device: {device}")
+    print(f"[GSQ] Device : {device}")
+    print(f"[GSQ] Loading {cfg.model_path} …")
 
-    # ── Load model ──────────────────────────────────────────────────────────
-    print(f"[GSQ] Loading model from {cfg.model_path} …")
     tokenizer = AutoTokenizer.from_pretrained(cfg.model_path)
-    model = AutoModelForCausalLM.from_pretrained(
-        cfg.model_path,
-        torch_dtype=torch.float16,
-        device_map="auto",
-        trust_remote_code=True,
-    )
-    model.eval()
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # ── Step 1: Calibration data ─────────────────────────────────────────────
-    samples = get_calibration_tokens(tokenizer, cfg, device)
+    # Save architecture config before loading weights (it's just JSON)
+    hf_config = AutoConfig.from_pretrained(cfg.model_path)
 
-    # ── Step 2: Sensitivity map ──────────────────────────────────────────────
+    model = AutoModelForCausalLM.from_pretrained(
+        cfg.model_path, torch_dtype=torch.float16,
+        device_map="auto", trust_remote_code=True,
+    )
+    model.eval()
+
+    samples         = get_calibration_tokens(tokenizer, cfg, device)
     sensitivity_map = compute_sensitivity_map(model, samples, cfg)
+    bit_assignment  = assign_bit_widths(sensitivity_map, cfg)
+    weight_store    = build_weight_store(model, bit_assignment)
 
-    # ── Step 3: Bit-width assignment ─────────────────────────────────────────
-    bit_assignment = assign_bit_widths(sensitivity_map, cfg)
+    # Drop the FP16 model from VRAM before writing to disk
+    del model
+    torch.cuda.empty_cache()
+    print("[GSQ] FP16 model freed from VRAM")
 
-    # ── Step 4+5: One-shot quantization ──────────────────────────────────────
-    quant_state = apply_gsq_quantization(model, bit_assignment)
-
-    # ── Step 6: Save ─────────────────────────────────────────────────────────
-    save_gsq_model(model, tokenizer, quant_state, sensitivity_map, bit_assignment, cfg)
+    save_gsq_checkpoint(tokenizer, hf_config, weight_store,
+                        sensitivity_map, bit_assignment, cfg)
 
 
 if __name__ == "__main__":
     cfg = GSQConfig(
-        model_path="hf_models/Llama-3.1-8B-Instruct",
-        output_path="hf_models/Llama-3.1-8B-Instruct-GSQ",
-        n_calibration_samples=50,
-        max_seq_len=512,
-        sensitive_ratio=0.25,
-        sensitive_bits=8,
-        robust_bits=4,
+        model_path      = "hf_models/Llama-3.1-8B-Instruct",
+        output_path     = "hf_models/Llama-3.1-8B-GSQ-int8",
+        n_calibration_samples = 50,
+        max_seq_len     = 512,
+        sensitive_ratio = 0.25,
+        sensitive_bits  = 8,
+        robust_bits     = 4,
     )
     run_gsq(cfg)
