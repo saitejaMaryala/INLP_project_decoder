@@ -65,10 +65,43 @@ Teammate run-time validation checklist:
 	- `thresholds.json`
 	- `summary.json`
 
+### Validated FROC results currently in repository
+
+Current FROC output artifacts are available for StereoSet runs under:
+
+- `outputs/stereoset/Llama-3.1-8B-Instruct_standard/`
+- `outputs/stereoset/Llama-3.1-8B-Instruct-GSQ_gsq/`
+- `outputs/stereoset/Meta-Llama-3.1-8B-Instruct-AWQ-INT4_awq/`
+
+Validated ROC-gap results:
+
+| Run | ROC gap (before) | ROC gap (after) |
+|---|---:|---:|
+| standard | 0.0420598709 | 0.0000000000 |
+| gsq | 0.0400424215 | 0.0000000000 |
+| awq | 0.0417565746 | 0.0000000000 |
+
+Validated metric shifts from `metrics_before_after.csv`:
+
+| Run | Accuracy (before -> after) | F1 (before -> after) | AUC (before -> after) | DPD (before -> after) | EOD (before -> after) |
+|---|---|---|---|---|---|
+| standard | 0.6625 -> 0.5000 | 0.6625 -> 0.0000 | 0.7035718750 -> 0.7035718750 | 0.0000 -> 0.0000 | 0.3956043956 -> 0.0000 |
+| gsq | 0.6425 -> 0.5000 | 0.6425 -> 0.0000 | 0.6874687500 -> 0.6874687500 | 0.0000 -> 0.0000 | 0.3000000000 -> 0.0000 |
+| awq | 0.6550 -> 0.5000 | 0.6550 -> 0.0000 | 0.7024625000 -> 0.7024625000 | 0.0000 -> 0.0000 | 0.3956043956 -> 0.0000 |
+
+Run setup (from `sanity_report.json`):
+
+- `num_pairs = 400`
+- `num_binary_samples = 800`
+- `num_groups = 19`
+- `epsilon = 0.05`
+- `k = 100`
+
 ## StereoSet FROC Script
 
 Use this script when you want direct FROC on StereoSet with geometric ROC transport (no pre-quantized checkpoint required).
 
+**Single mode (pragmatic):**
 ```bash
 PYTHONPATH=. python scripts/run_stereoset_froc.py \
 	--model_name gpt2 \
@@ -77,13 +110,41 @@ PYTHONPATH=. python scripts/run_stereoset_froc.py \
 	--group_field target \
 	--epsilon 0.05 \
 	--max_samples 400 \
-	--output_dir outputs/decoder_phase5/stereoset
+	--froc-mode pragmatic \
+	--output_dir outputs/stereoset
 ```
+
+**Paired strict/pragmatic modes** (generates both in a single run):
+```bash
+PYTHONPATH=. python scripts/run_stereoset_froc.py \
+	--model_name gpt2 \
+	--dataset_path benchmark_datasets/stereo_set/stereo_set.json \
+	--subset intrasentence \
+	--group_field target \
+	--epsilon 0.05 \
+	--max_samples 400 \
+	--froc-mode both \
+	--output_dir outputs/stereoset
+```
+
+With `--froc-mode both`, outputs are organized as:
+- `outputs/stereoset/phase23_strict/<model>_<type>/` — strict mode artifacts
+- `outputs/stereoset/phase23_pragmatic/<model>_<type>/` — pragmatic mode artifacts
+
+Each folder contains:
+- `metrics_before_after.csv` — before/after fairness metrics
+- `roc_gap.csv` — ROC gap before/after
+- `thresholds.json` — per-group thresholds
+- `summary.json` — run metadata
+- `sanity_report.json` — dataset and epsilon info
+- `roc_curves_*_before.png` and `roc_curves_*_after.png` — ROC curve plots
 
 Key notes:
 - The script builds binary pairs from stereotype vs anti-stereotype sentences.
 - INT8 is created at runtime with dynamic quantization (`torch.quantization.quantize_dynamic`).
-- Outputs include `metrics_before_after.csv`, `roc_gap.csv`, and `thresholds.json`.
+- `--froc-mode strict`: uses transport-aware threshold targeting with L1-budget control.
+- `--froc-mode pragmatic`: uses direct operating-point matching (deterministic).
+- `--froc-mode both`: runs both modes sequentially to phase23_strict/ and phase23_pragmatic/ folders.
 
 ### Quick smoke test (20 pairs)
 
@@ -140,6 +201,94 @@ python scripts/run_stereoset_froc.py \
 
 Runs the four dataset evaluation scripts sequentially for a provided model_path
 
+## BBQ FROC Script
+
+Use this script to apply strict/pragmatic FROC fairness correction to BBQ (Bias Benchmark for Question Answering) results.
+
+**Single mode (pragmatic):**
+```bash
+PYTHONPATH=. python scripts/run_bbq_froc.py \
+	--model_path gpt2 \
+	--model_type standard \
+	--dataset_path benchmark_datasets/bbq \
+	--epsilon 0.05 \
+	--froc-mode pragmatic \
+	--output_dir outputs/bbq
+```
+
+**Paired strict/pragmatic modes:**
+```bash
+PYTHONPATH=. python scripts/run_bbq_froc.py \
+	--model_path gpt2 \
+	--model_type standard \
+	--dataset_path benchmark_datasets/bbq \
+	--epsilon 0.05 \
+	--froc-mode both \
+	--output_dir outputs/bbq
+```
+
+With `--froc-mode both`, outputs are organized as:
+- `outputs/bbq/phase23_strict/<model>_<type>/` — strict mode artifacts
+- `outputs/bbq/phase23_pragmatic/<model>_<type>/` — pragmatic mode artifacts
+
+Each folder contains:
+- `metrics_before_after.csv` — before/after fairness metrics
+- `roc_gap.csv` — ROC gap before/after
+- `thresholds.json` — per-category thresholds
+- `summary.json` — run metadata
+- `sanity_report.json` — dataset and epsilon info
+
+Key notes:
+- BBQ labels: 1 = pro-stereotype prediction, 0 = anti-stereotype prediction
+- Groups: category (gender, race, religion)
+- `--froc-mode strict`: uses transport-aware threshold targeting with L1-budget control.
+- `--froc-mode pragmatic`: uses direct operating-point matching (deterministic).
+- `--froc-mode both`: runs both modes sequentially to phase23_strict/ and phase23_pragmatic/ folders.
+
+## WinoBias FROC Script
+
+Use this script to apply strict/pragmatic FROC fairness correction to WinoBias (gender bias in coreference resolution) results.
+
+**Single mode (pragmatic):**
+```bash
+PYTHONPATH=. python scripts/run_winobias_froc.py \
+	--model_path gpt2 \
+	--model_type standard \
+	--dataset_dir benchmark_datasets/wino_bias \
+	--epsilon 0.05 \
+	--froc-mode pragmatic \
+	--output_dir outputs/winobias
+```
+
+**Paired strict/pragmatic modes:**
+```bash
+PYTHONPATH=. python scripts/run_winobias_froc.py \
+	--model_path gpt2 \
+	--model_type standard \
+	--dataset_dir benchmark_datasets/wino_bias \
+	--epsilon 0.05 \
+	--froc-mode both \
+	--output_dir outputs/winobias
+```
+
+With `--froc-mode both`, outputs are organized as:
+- `outputs/winobias/phase23_strict/<model>_<type>/` — strict mode artifacts
+- `outputs/winobias/phase23_pragmatic/<model>_<type>/` — pragmatic mode artifacts
+
+Each folder contains:
+- `metrics_before_after.csv` — before/after fairness metrics
+- `roc_gap.csv` — ROC gap before/after
+- `thresholds.json` — per-gender thresholds
+- `summary.json` — run metadata
+- `sanity_report.json` — dataset and epsilon info
+
+Key notes:
+- WinoBias labels: 1 = correct coreference resolution, 0 = incorrect
+- Groups: gender (male, female)
+- Uses pro-stereotyped and anti-stereotyped sentence pairs to measure bias correction
+- `--froc-mode strict`: uses transport-aware threshold targeting with L1-budget control.
+- `--froc-mode pragmatic`: uses direct operating-point matching (deterministic).
+- `--froc-mode both`: runs both modes sequentially to phase23_strict/ and phase23_pragmatic/ folders.
 
 bash run_all_models.sh
 

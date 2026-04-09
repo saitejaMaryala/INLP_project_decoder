@@ -21,8 +21,10 @@ if PROJECT_ROOT not in sys.path:
 
 from utils.decoder_froc import (
     apply_group_thresholds,
+    compute_global_operating_point,
     compute_roc_gap,
     evaluate_metrics,
+    find_group_thresholds_strict,
     flatten_metrics_for_csv,
     flatten_roc_gap_for_csv,
 )
@@ -303,6 +305,74 @@ def plot_roc_curves_by_group(y_true, y_score, group, title, save_path):
     plt.close(fig)
 
 
+def _run_single_mode(args, records, y_true, y_score, group, model_type, froc_mode, run_output_dir):
+    """
+    Run a single FROC mode (strict or pragmatic) and return metrics, thresholds, and diagnostics.
+    """
+    if froc_mode == "strict":
+        target_tpr, target_fpr = compute_global_operating_point(y_true, y_score)
+        thresholds, diagnostics = find_group_thresholds_strict(
+            y_true,
+            y_score,
+            group,
+            target_tpr,
+            target_fpr,
+            eps=args.epsilon,
+            num_points=200,
+        )
+    else:  # pragmatic
+        thresholds = learn_froc_thresholds(
+            y_true,
+            y_score,
+            group,
+            epsilon=args.epsilon,
+            k=args.k,
+            disadvantaged_group=args.disadvantaged_group,
+        )
+        diagnostics = {"mode": "pragmatic", "eps": float(args.epsilon)}
+
+    metrics_before, metrics_after, y_pred_after = evaluate_before_after(y_true, y_score, group, thresholds)
+    roc_gap_before = compute_roc_gap(y_true, y_score, group)
+    roc_gap_after = compute_roc_gap(y_true, y_pred_after, group)
+
+    metrics_before_after = {
+        model_type: {
+            "before": metrics_before,
+            "after": metrics_after,
+            "global_operating_point": {"target_tpr": float("nan"), "target_fpr": float("nan")},
+            "n_samples": int(len(y_true)),
+        }
+    }
+
+    plot_roc_curves_by_group(
+        y_true,
+        y_score,
+        group,
+        title=f"StereoSet ROC by Group ({model_type}, {froc_mode} before)",
+        save_path=os.path.join(run_output_dir, f"roc_curves_{model_type}_before.png"),
+    )
+    plot_roc_curves_by_group(
+        y_true,
+        y_pred_after,
+        group,
+        title=f"StereoSet ROC by Group ({model_type}, {froc_mode} after)",
+        save_path=os.path.join(run_output_dir, f"roc_curves_{model_type}_after.png"),
+    )
+
+    metrics_df = flatten_metrics_for_csv(metrics_before_after)
+    roc_gap_df = flatten_roc_gap_for_csv({model_type: roc_gap_before}, {model_type: roc_gap_after})
+
+    return {
+        "metrics_before_after": metrics_before_after,
+        "thresholds": {model_type: {"thresholds": thresholds}},
+        "roc_gap_before": roc_gap_before,
+        "roc_gap_after": roc_gap_after,
+        "metrics_df": metrics_df,
+        "roc_gap_df": roc_gap_df,
+        "diagnostics": diagnostics,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="StereoSet FROC runner with geometric ROC transport")
     parser.add_argument("--model_name", default="gpt2")
@@ -314,6 +384,7 @@ def main():
     parser.add_argument("--epsilon", type=float, default=0.05)
     parser.add_argument("--k", type=int, default=100)
     parser.add_argument("--max_samples", type=int, default=400)
+    parser.add_argument("--froc-mode", default="pragmatic", choices=["strict", "pragmatic", "both"], help="FROC mode: strict (L1-budget), pragmatic (utility-focused), or both")
     parser.add_argument("--smoke_test", action="store_true", help="Run a fast sanity pass with a small sample size")
     parser.add_argument("--smoke_samples", type=int, default=20, help="Number of StereoSet pairs for smoke test")
     parser.add_argument("--use_context", action="store_true")
@@ -352,88 +423,51 @@ def main():
 
     y_true, y_score, group = score_records(model, tokenizer, records)
 
-    results = {
-        args.model_type: {"y_true": y_true, "y_score": y_score, "group": group}
-    }
+    modes_to_run = ["strict", "pragmatic"] if args.froc_mode == "both" else [args.froc_mode]
 
-    metrics_before_after = {}
-    thresholds_by_model = {}
-    roc_gap_before = {}
-    roc_gap_after = {}
+    for mode in modes_to_run:
+        mode_output_dir = os.path.join(args.output_dir, f"phase23_{mode}", f"{os.path.basename(os.path.normpath(args.model_name))}_{args.model_type}")
+        os.makedirs(mode_output_dir, exist_ok=True)
 
-    for model_key, payload in results.items():
-        y_true_m = payload["y_true"]
-        y_score_m = payload["y_score"]
-        group_m = payload["group"]
+        result = _run_single_mode(args, records, y_true, y_score, group, args.model_type, mode, mode_output_dir)
 
-        thresholds = learn_froc_thresholds(
-            y_true_m,
-            y_score_m,
-            group_m,
-            epsilon=args.epsilon,
-            k=args.k,
-            disadvantaged_group=args.disadvantaged_group,
-        )
+        metrics_df = result["metrics_df"]
+        roc_gap_df = result["roc_gap_df"]
+        thresholds_by_model = result["thresholds"]
 
-        metrics_before, metrics_after, y_pred_after = evaluate_before_after(y_true_m, y_score_m, group_m, thresholds)
-        metrics_before_after[model_key] = {
-            "before": metrics_before,
-            "after": metrics_after,
-            "global_operating_point": {"target_tpr": float("nan"), "target_fpr": float("nan")},
-            "n_samples": int(len(y_true_m)),
+        metrics_df.to_csv(os.path.join(mode_output_dir, "metrics_before_after.csv"), index=False)
+        roc_gap_df.to_csv(os.path.join(mode_output_dir, "roc_gap.csv"), index=False)
+
+        with open(os.path.join(mode_output_dir, "thresholds.json"), "w", encoding="utf-8") as f:
+            json.dump(thresholds_by_model, f, indent=2)
+
+        summary = {
+            "num_pairs": len(records),
+            "smoke_test": bool(args.smoke_test),
+            "froc_mode": mode,
+            "models": list(result["metrics_before_after"].keys()),
+            "metrics_before_after": metrics_df.to_dict(orient="records"),
+            "roc_gap": roc_gap_df.to_dict(orient="records"),
         }
-        thresholds_by_model[model_key] = {"thresholds": thresholds}
+        with open(os.path.join(mode_output_dir, "summary.json"), "w", encoding="utf-8") as f:
+            json.dump(summary, f, indent=2)
 
-        roc_gap_before[model_key] = compute_roc_gap(y_true_m, y_score_m, group_m)
-        roc_gap_after[model_key] = compute_roc_gap(y_true_m, y_pred_after, group_m)
+        sanity = {
+            "num_pairs": int(len(records)),
+            "num_binary_samples": int(len(y_true)),
+            "num_groups": int(len(np.unique(group))),
+            "group_counts": {str(g): int(np.sum(group == g)) for g in np.unique(group)},
+            "smoke_test": bool(args.smoke_test),
+            "epsilon": float(args.epsilon),
+            "k": int(args.k),
+            "froc_mode": mode,
+        }
+        with open(os.path.join(mode_output_dir, "sanity_report.json"), "w", encoding="utf-8") as f:
+            json.dump(sanity, f, indent=2)
 
-        plot_roc_curves_by_group(
-            y_true_m,
-            y_score_m,
-            group_m,
-            title=f"StereoSet ROC by Group ({model_key}, before FROC)",
-            save_path=os.path.join(run_output_dir, f"roc_curves_{model_key}_before.png"),
-        )
-        plot_roc_curves_by_group(
-            y_true_m,
-            y_pred_after,
-            group_m,
-            title=f"StereoSet ROC by Group ({model_key}, after FROC)",
-            save_path=os.path.join(run_output_dir, f"roc_curves_{model_key}_after.png"),
-        )
+        print(f"StereoSet FROC {mode} mode complete. Outputs written to: {mode_output_dir}")
 
-    metrics_df = flatten_metrics_for_csv(metrics_before_after)
-    roc_gap_df = flatten_roc_gap_for_csv(roc_gap_before, roc_gap_after)
-
-    metrics_df.to_csv(os.path.join(run_output_dir, "metrics_before_after.csv"), index=False)
-    roc_gap_df.to_csv(os.path.join(run_output_dir, "roc_gap.csv"), index=False)
-
-    with open(os.path.join(run_output_dir, "thresholds.json"), "w", encoding="utf-8") as f:
-        json.dump(thresholds_by_model, f, indent=2)
-
-    summary = {
-        "num_pairs": len(records),
-        "smoke_test": bool(args.smoke_test),
-        "models": list(results.keys()),
-        "metrics_before_after": metrics_df.to_dict(orient="records"),
-        "roc_gap": roc_gap_df.to_dict(orient="records"),
-    }
-    with open(os.path.join(run_output_dir, "summary.json"), "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
-
-    sanity = {
-        "num_pairs": int(len(records)),
-        "num_binary_samples": int(len(y_true)),
-        "num_groups": int(len(np.unique(group))),
-        "group_counts": {str(g): int(np.sum(group == g)) for g in np.unique(group)},
-        "smoke_test": bool(args.smoke_test),
-        "epsilon": float(args.epsilon),
-        "k": int(args.k),
-    }
-    with open(os.path.join(run_output_dir, "sanity_report.json"), "w", encoding="utf-8") as f:
-        json.dump(sanity, f, indent=2)
-
-    print(f"StereoSet FROC complete. Outputs written to: {run_output_dir}")
+    print(f"All FROC modes complete.")
 
 
 if __name__ == "__main__":
