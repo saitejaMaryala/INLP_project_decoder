@@ -1,11 +1,16 @@
 import argparse
 import json
 import os
+import sys
 import warnings
 
 import numpy as np
 import pandas as pd
 import torch
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from utils.decoder_froc import (
     compute_scores_batch,
@@ -21,6 +26,9 @@ from utils.decoder_froc import (
     roc_analysis_pipeline,
     threshold_invariance_check,
 )
+
+from utils.load_model import load_model
+from gsq_quant.gsq_load import load_gsq_model
 
 
 def _score_model(tokenizer, model, texts):
@@ -190,15 +198,15 @@ def _run_single_mode(
 
 def main():
     parser = argparse.ArgumentParser(description="Run decoder FROC Phase 5 pipeline")
-    parser.add_argument("--data_path", required=True, help="CSV, JSON, or JSONL with text/label/group columns")
+    parser.add_argument("--data_path", default="/home/sai.teja/gsq_decoder/benchmark_datasets/stereo_set/stereo_set.json", help="CSV, JSON, or JSONL with text/label/group columns")
     parser.add_argument("--model_name", default="gpt2", help="Hugging Face causal LM name or path")
-    parser.add_argument("--output_dir", default="outputs/decoder_phase5")
+    parser.add_argument("--output_dir", default="./output_decoder_phase5")
     parser.add_argument("--device", default="cuda", help="cuda or cpu")
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--skip_plots", action="store_true")
     parser.add_argument(
         "--froc-mode",
-        default="strict",
+        default="both",
         choices=["strict", "pragmatic", "both"],
         help="FROC mode to run",
     )
@@ -209,11 +217,38 @@ def main():
         default="-0.02,-0.01,0,0.01,0.02",
         help="Comma-separated threshold perturbations for invariance checks",
     )
+    parser.add_argument(
+        "--model_type",
+        default="standard",
+        choices=["standard", "awq", "gsq"],
+        help="Type of model to load"
+    )   
     args = parser.parse_args()
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    frame = load_decoder_data(args.data_path)
+    if "stereo_set" in args.data_path.lower():
+        with open(args.data_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        flat_records = []
+        for subset in ["intrasentence", "intersentence"]:
+            if subset in data.get("data", {}):
+                for sample in data["data"][subset]:
+                    stereo = None
+                    anti = None
+                    for sentence in sample.get("sentences", []):
+                        if sentence.get("gold_label") == "stereotype":
+                            stereo = sentence.get("sentence")
+                        elif sentence.get("gold_label") == "anti-stereotype":
+                            anti = sentence.get("sentence")
+                    if stereo and anti:
+                        group_value = str(sample.get("target", "unknown"))
+                        flat_records.append({"text": stereo, "label": 1, "group": group_value})
+                        flat_records.append({"text": anti, "label": 0, "group": group_value})
+        frame = pd.DataFrame(flat_records)
+    else:
+        frame = load_decoder_data(args.data_path)
+        
     if args.max_samples is not None:
         frame = frame.head(args.max_samples).reset_index(drop=True)
 
@@ -223,31 +258,20 @@ def main():
 
     results = {}
 
-    tokenizer_fp32, model_fp32 = load_decoder_model(args.model_name, device=args.device)
-    results["fp32"] = {
-        "y_true": labels,
-        "y_score": _score_model(tokenizer_fp32, model_fp32, texts),
-        "group": groups,
-    }
+    if args.model_type == "gsq":
+        model, tokenizer, metadata = load_gsq_model(args.model_name, device_map="auto")
 
-    if torch.cuda.is_available() and args.device == "cuda":
-        try:
-            tokenizer_fp16, model_fp16 = load_decoder_model(args.model_name, device=args.device, torch_dtype=torch.float16)
-            results["fp16"] = {
-                "y_true": labels,
-                "y_score": _score_model(tokenizer_fp16, model_fp16, texts),
-                "group": groups,
-            }
-        except Exception as exc:
-            warnings.warn(f"FP16 loading failed, skipping the FP16 variant: {exc}")
-    else:
-        print("FP16 requested but CUDA is unavailable; skipping the FP16 variant.")
+    elif args.model_type == "awq":
+        model, tokenizer = load_model(args.model_name, load_type="AWQ")
 
-    tokenizer_int8, model_int8 = load_decoder_model(args.model_name, device="cpu")
-    model_int8 = quantize_model_int8(model_int8)
-    results["int8"] = {
+    else:  # standard
+        model, tokenizer = load_model(args.model_name, load_type="standard")
+
+    model_type_name = args.model_type
+
+    results[model_type_name] = {
         "y_true": labels,
-        "y_score": _score_model(tokenizer_int8, model_int8, texts),
+        "y_score": _score_model(tokenizer, model, texts),
         "group": groups,
     }
 
@@ -260,13 +284,14 @@ def main():
     if not invariance_deltas:
         invariance_deltas = [-0.02, -0.01, 0.0, 0.01, 0.02]
 
+    model_basename = os.path.basename(os.path.normpath(args.model_name))
     if args.froc_mode == "both":
         mode_to_dir = {
-            "strict": os.path.join(args.output_dir, "phase23_strict"),
-            "pragmatic": os.path.join(args.output_dir, "phase23_pragmatic"),
+            "strict": os.path.join(args.output_dir, "phase23_strict", model_basename),
+            "pragmatic": os.path.join(args.output_dir, "phase23_pragmatic", model_basename),
         }
     else:
-        mode_to_dir = {args.froc_mode: args.output_dir}
+        mode_to_dir = {args.froc_mode: os.path.join(args.output_dir, model_basename)}
 
     for mode_name, mode_output_dir in mode_to_dir.items():
         _run_single_mode(
@@ -283,4 +308,5 @@ def main():
 
 
 if __name__ == "__main__":
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     main()

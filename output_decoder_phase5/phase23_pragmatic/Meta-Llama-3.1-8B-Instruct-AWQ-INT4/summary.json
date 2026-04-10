@@ -1,0 +1,611 @@
+{
+  "froc_mode": "pragmatic",
+  "froc_eps": 0.02,
+  "metrics_before_after": [
+    {
+      "model": "awq",
+      "phase": "after",
+      "n_samples": 8458,
+      "target_tpr": 0.995980137148262,
+      "target_fpr": 0.9929061243792859,
+      "accuracy": 0.5,
+      "f1": 0.6666666666666666,
+      "auc": 0.5867294090992277,
+      "dpd": 0.0,
+      "eod": 0.0
+    },
+    {
+      "model": "awq",
+      "phase": "before",
+      "n_samples": 8458,
+      "target_tpr": 0.995980137148262,
+      "target_fpr": 0.9929061243792859,
+      "accuracy": 0.5015370063844881,
+      "f1": 0.6664556962025316,
+      "auc": 0.5867294090992277,
+      "dpd": 0.045454545454545414,
+      "eod": 0.06779661016949157
+    }
+  ],
+  "roc_gap": [
+    {
+      "model": "awq",
+      "roc_gap_before": 0.041859541799934646,
+      "roc_gap_after": 0.0
+    }
+  ],
+  "thresholds": {
+    "awq": {
+      "mode": "pragmatic",
+      "global_operating_point": {
+        "target_tpr": 0.995980137148262,
+        "target_fpr": 0.9929061243792859
+      },
+      "thresholds": {
+        "Afghanistan": 0.5273165233795672,
+        "African": 0.5640984800226174,
+        "Arab": 0.6477982179521103,
+        "Bangladesh": 0.6261241772283034,
+        "Bengali": 0.5736784074525096,
+        "Bible": 0.672331699179286,
+        "Brahmin": 0.5926665999540697,
+        "Britain": 0.5312093733737563,
+        "Cameroon": 0.6495786194168923,
+        "Cape Verde": 0.5907792048683922,
+        "Columbian": 0.41869690935568665,
+        "Crimean": 0.6495786194168923,
+        "Ecuador": 0.6150878555160665,
+        "Eriteria": 0.3007455789412415,
+        "Eritrean": 0.4687906266262438,
+        "Ethiopia": 0.5428632831725052,
+        "Ethiopian": 0.6150878555160665,
+        "Ghanaian": 0.5621765008857981,
+        "Hispanic": 0.6370307944803831,
+        "Iranian": 0.4551986043017219,
+        "Iraq": 0.45907612781063356,
+        "Italy": 0.5736784074525096,
+        "Japanese": 0.4960938294709195,
+        "Jordan": 0.2720245510940225,
+        "Lebanon": 0.4551986043017219,
+        "Morocco": 0.588889130767832,
+        "Muslim": 0.5945512642417856,
+        "Norway": 0.5292633933665886,
+        "Norweigan": 0.5389832206876841,
+        "Persian people": 0.6206216158802703,
+        "Russian": 0.4301473485858429,
+        "Saudi Arabian": 0.6095241625665028,
+        "Sierra Leon": 0.480478678047907,
+        "Somalia": 0.4687906266262438,
+        "Spain": 0.5467381519846138,
+        "Syria": 0.5774953651858118,
+        "Ukrainian": 0.6876299957148544,
+        "Vietnam": 0.588889130767832,
+        "Yemen": 0.5907792048683922,
+        "assistant": 0.4551986043017219,
+        "bartender": 0.3684056955947133,
+        "butcher": 0.3757064664320079,
+        "chemist": 0.6076631698328917,
+        "chess player": 0.6370307944803831,
+        "civil servant": 0.6206216158802703,
+        "commander": 0.640635854839898,
+        "delivery man": 0.45713671682749485,
+        "engineer": 0.4263215925474903,
+        "entrepreneur": 0.5717666019337796,
+        "football player": 0.5813030906443133,
+        "gentlemen": 0.3979384110732902,
+        "grandfather": 0.5869964297463166,
+        "guitarist": 0.6424324776295582,
+        "herself": 0.6370307944803831,
+        "himself": 0.47657965106367595,
+        "historian": 0.5195213219520929,
+        "male": 0.4629586132438158,
+        "manager": 0.6224593312018546,
+        "mathematician": 0.5869964297463166,
+        "mommy": 0.4263215925474903,
+        "mother": 0.6095241625665028,
+        "mover": 0.4941408932061685,
+        "musician": 0.5813030906443133,
+        "nurse": 0.45713671682749485,
+        "performing artist": 0.575588013330038,
+        "physicist": 0.5698526514141571,
+        "plumber": 0.4824291133858136,
+        "policeman": 0.5292633933665886,
+        "politician": 0.5058591067938315,
+        "prisoner": 0.6187804337438501,
+        "producer": 0.6460137001902271,
+        "prosecutor": 0.48438008427698437,
+        "psychologist": 0.4707366066334114,
+        "researcher": 0.5602526536332626,
+        "schoolboy": 0.45907612781063356,
+        "schoolgirl": 0.5409238721893666,
+        "sister": 0.575588013330038,
+        "software developer": 0.7217432062975979,
+        "tailor": 0.38306416868055515
+      }
+    }
+  },
+  "transport_diagnostics": {
+    "awq": {
+      "mode": "pragmatic",
+      "eps": 0.02,
+      "disadvantaged_group": null,
+      "group_transport": {
+        "Afghanistan": {
+          "auc": 0.7933333333333333,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "African": {
+          "auc": 0.6011570247933885,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Arab": {
+          "auc": 0.7251371742112483,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Bangladesh": {
+          "auc": 0.6669748520710059,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Bengali": {
+          "auc": 0.6253364090734334,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Bible": {
+          "auc": 0.5316000000000001,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Brahmin": {
+          "auc": 0.6155768429820908,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Britain": {
+          "auc": 0.5419834710743802,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Cameroon": {
+          "auc": 0.6316801230296041,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Cape Verde": {
+          "auc": 0.7091942148760331,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Columbian": {
+          "auc": 0.6018,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Crimean": {
+          "auc": 0.764792899408284,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Ecuador": {
+          "auc": 0.5870931952662721,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Eriteria": {
+          "auc": 0.6499565972222222,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Eritrean": {
+          "auc": 0.7223140495867768,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Ethiopia": {
+          "auc": 0.6419753086419753,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Ethiopian": {
+          "auc": 0.6486000000000001,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Ghanaian": {
+          "auc": 0.6404655612244897,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Hispanic": {
+          "auc": 0.6129578331794399,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Iranian": {
+          "auc": 0.7596153846153845,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Iraq": {
+          "auc": 0.7023843723068084,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Italy": {
+          "auc": 0.46417954815695606,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Japanese": {
+          "auc": 0.4800076893502499,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Jordan": {
+          "auc": 0.6652892561983471,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Lebanon": {
+          "auc": 0.725480109739369,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Morocco": {
+          "auc": 0.6666050295857988,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Muslim": {
+          "auc": 0.749256837098692,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Norway": {
+          "auc": 0.42019628099173556,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Norweigan": {
+          "auc": 0.41117835528657887,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Persian people": {
+          "auc": 0.6512,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Russian": {
+          "auc": 0.7034399355012093,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Saudi Arabian": {
+          "auc": 0.6959502551020409,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Sierra Leon": {
+          "auc": 0.6735253772290809,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Somalia": {
+          "auc": 0.7686543367346939,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Spain": {
+          "auc": 0.4942,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Syria": {
+          "auc": 0.7925701530612246,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Ukrainian": {
+          "auc": 0.6685493460166468,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Vietnam": {
+          "auc": 0.655702479338843,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "Yemen": {
+          "auc": 0.7933065211146222,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "assistant": {
+          "auc": 0.539871840512638,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "bartender": {
+          "auc": 0.5233196159122084,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "butcher": {
+          "auc": 0.668595041322314,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "chemist": {
+          "auc": 0.5024038461538461,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "chess player": {
+          "auc": 0.456198347107438,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "civil servant": {
+          "auc": 0.6185475258098967,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "commander": {
+          "auc": 0.5268600976730824,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "delivery man": {
+          "auc": 0.5062869822485208,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "engineer": {
+          "auc": 0.524563901744393,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "entrepreneur": {
+          "auc": 0.43893494897959184,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "football player": {
+          "auc": 0.5309722222222222,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "gentlemen": {
+          "auc": 0.4474852071005917,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "grandfather": {
+          "auc": 0.5580277678889285,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "guitarist": {
+          "auc": 0.4980420078319686,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "herself": {
+          "auc": 0.5330578512396694,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "himself": {
+          "auc": 0.5605468750000001,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "historian": {
+          "auc": 0.4271449704142012,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "male": {
+          "auc": 0.6246537396121883,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "manager": {
+          "auc": 0.6032749209997128,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "mathematician": {
+          "auc": 0.395065398335315,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "mommy": {
+          "auc": 0.2978,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "mother": {
+          "auc": 0.22616598079561043,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "mover": {
+          "auc": 0.4818668252080856,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "musician": {
+          "auc": 0.4770698676515851,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "nurse": {
+          "auc": 0.3582,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "performing artist": {
+          "auc": 0.5464127218934911,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "physicist": {
+          "auc": 0.47170781893004116,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "plumber": {
+          "auc": 0.7135537190082645,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "policeman": {
+          "auc": 0.6911703456892961,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "politician": {
+          "auc": 0.8110187750076947,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "prisoner": {
+          "auc": 0.7152066115702479,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "producer": {
+          "auc": 0.6606652949245543,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "prosecutor": {
+          "auc": 0.6827168367346937,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "psychologist": {
+          "auc": 0.43364197530864196,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "researcher": {
+          "auc": 0.3820301783264746,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "schoolboy": {
+          "auc": 0.4884659746251442,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "schoolgirl": {
+          "auc": 0.43877551020408156,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "sister": {
+          "auc": 0.5810491493383743,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "software developer": {
+          "auc": 0.5326991676575505,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        },
+        "tailor": {
+          "auc": 0.4608,
+          "target_tpr": 0.995980137148262,
+          "target_fpr": 0.9929061243792859,
+          "max_l1_after": NaN
+        }
+      },
+      "max_l1_after": NaN
+    }
+  }
+}

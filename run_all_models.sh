@@ -1,26 +1,14 @@
 #!/bin/bash
-# run_all_models.sh
 
-source /ssd_scratch/saiteja/miniconda3/bin/activate
-conda activate gsq
+echo "Starting evaluation for all models..."
 
-for m in original_models/*; do
-    if [ -d "$m" ]; then
-        # Check if it has vllm_quant_model nested directory
-        if [ -d "$m/vllm_quant_model" ]; then
-            MODEL_PATH="$m/vllm_quant_model"
-        else
-            MODEL_PATH="$m"
-        fi
-        
-        # Only evaluate if config.json exists
-        if [ -f "$MODEL_PATH/config.json" ]; then
-            echo "Scheduling evaluation for $MODEL_PATH"
-            # It's better to run in background or directly.
-            # Assuming you run it serially (this will take a while)
-            bash evaluate.sh "$MODEL_PATH"
-        fi
-    fi
-done
+echo "[1/3] running evaluation on standard model"
+python scripts/run_decoder_phase5.py --model_name hf_models/Llama-3.1-8B-Instruct --model_type standard
+
+echo "[2/3] running evaluation on awq model"
+python scripts/run_decoder_phase5.py --model_name hf_models/Meta-Llama-3.1-8B-Instruct-AWQ-INT4/ --model_type awq
+
+echo "[3/3] running evaluation on gsq model"
+python scripts/run_decoder_phase5.py --model_name hf_models/Llama-3.1-8B-Instruct-GSQ/ --model_type gsq
 
 echo "All evaluations finished."

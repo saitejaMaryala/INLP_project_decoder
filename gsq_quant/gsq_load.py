@@ -9,7 +9,7 @@ HuggingFace load — we just also read gsq_metadata.json to surface
 stats and allow optional exact re-quantization.
 """
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import json
 import torch
 from pathlib import Path

@@ -214,8 +214,9 @@ def compute_scores_batch(model, tokenizer, texts):
     Returns:
         numpy array of scores
     """
+    from tqdm import tqdm
     scores = []
-    for text in texts:
+    for text in tqdm(texts, desc="Scoring texts"):
         prompt = build_prompt(text)
         logprobs = get_token_logprobs(model, tokenizer, prompt, DEFAULT_CANDIDATE_TOKENS)
         scores.append(compute_score(logprobs))
