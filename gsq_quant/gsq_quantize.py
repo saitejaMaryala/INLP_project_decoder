@@ -22,7 +22,6 @@ from typing import Optional
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
 # ---------------------------------------------------------------------------

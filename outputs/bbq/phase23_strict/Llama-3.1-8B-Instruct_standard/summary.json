@@ -1,0 +1,40 @@
+{
+  "num_samples": 13736,
+  "froc_mode": "strict",
+  "models": [
+    "standard"
+  ],
+  "metrics_before_after": [
+    {
+      "model": "standard",
+      "phase": "before",
+      "n_samples": 13736,
+      "target_tpr": 0.0,
+      "target_fpr": 0.0,
+      "accuracy": 0.47721316249271983,
+      "f1": 0.0,
+      "auc": 0.5192608768945001,
+      "dpd": 0.0,
+      "eod": 0.0
+    },
+    {
+      "model": "standard",
+      "phase": "after",
+      "n_samples": 13736,
+      "target_tpr": 0.0,
+      "target_fpr": 0.0,
+      "accuracy": 0.4775771694816541,
+      "f1": 0.0013915947676036739,
+      "auc": 0.5192608768945001,
+      "dpd": 0.0033333333333333335,
+      "eod": 0.006666666666666667
+    }
+  ],
+  "roc_gap": [
+    {
+      "model": "standard",
+      "roc_gap_before": 0.0007160974629669063,
+      "roc_gap_after": 9.52665816539581e-06
+    }
+  ]
+}

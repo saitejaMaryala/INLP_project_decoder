@@ -1,0 +1,40 @@
+{
+  "num_samples": 13736,
+  "froc_mode": "strict",
+  "models": [
+    "gsq"
+  ],
+  "metrics_before_after": [
+    {
+      "model": "gsq",
+      "phase": "before",
+      "n_samples": 13736,
+      "target_tpr": 0.0,
+      "target_fpr": 0.0,
+      "accuracy": 0.47386429819452536,
+      "f1": 0.0,
+      "auc": 0.5200674235414332,
+      "dpd": 0.0,
+      "eod": 0.0
+    },
+    {
+      "model": "gsq",
+      "phase": "after",
+      "n_samples": 13736,
+      "target_tpr": 0.0,
+      "target_fpr": 0.0,
+      "accuracy": 0.47451951077460686,
+      "f1": 0.0024875621890547263,
+      "auc": 0.5200674235414332,
+      "dpd": 0.0015912305516265913,
+      "eod": 0.002904162633107454
+    }
+  ],
+  "roc_gap": [
+    {
+      "model": "gsq",
+      "roc_gap_before": 0.0005486540094067376,
+      "roc_gap_after": 1.8837238600538512e-06
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "awq": {
+    "thresholds": {
+      "Gender_identity": -61.95689034461875,
+      "Race_ethnicity": -96.2727279663076,
+      "Religion": -78.84686422348022
+    }
+  }
+}

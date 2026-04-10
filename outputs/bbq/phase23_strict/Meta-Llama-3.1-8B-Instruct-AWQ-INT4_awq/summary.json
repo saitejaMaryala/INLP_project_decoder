@@ -1,0 +1,40 @@
+{
+  "num_samples": 13736,
+  "froc_mode": "strict",
+  "models": [
+    "awq"
+  ],
+  "metrics_before_after": [
+    {
+      "model": "awq",
+      "phase": "before",
+      "n_samples": 13736,
+      "target_tpr": 0.0,
+      "target_fpr": 0.0,
+      "accuracy": 0.4836924868957484,
+      "f1": 0.0,
+      "auc": 0.5134190596590167,
+      "dpd": 0.0,
+      "eod": 0.0
+    },
+    {
+      "model": "awq",
+      "phase": "after",
+      "n_samples": 13736,
+      "target_tpr": 0.0,
+      "target_fpr": 0.0,
+      "accuracy": 0.4839108910891089,
+      "f1": 0.0008456659619450317,
+      "auc": 0.5134190596590167,
+      "dpd": 0.0025,
+      "eod": 0.004918032786885246
+    }
+  ],
+  "roc_gap": [
+    {
+      "model": "awq",
+      "roc_gap_before": 0.0011061586495336297,
+      "roc_gap_after": 5.402045176299378e-06
+    }
+  ]
+}

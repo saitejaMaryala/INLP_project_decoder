@@ -1,0 +1,11 @@
+{
+  "num_samples": 13736,
+  "num_groups": 3,
+  "group_counts": {
+    "Gender_identity": 5656,
+    "Race_ethnicity": 6880,
+    "Religion": 1200
+  },
+  "epsilon": 0.05,
+  "froc_mode": "strict"
+}

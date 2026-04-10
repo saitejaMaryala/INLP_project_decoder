@@ -1,0 +1,9 @@
+{
+  "standard": {
+    "thresholds": {
+      "Gender_identity": -63.04615759849448,
+      "Race_ethnicity": -95.26586532592674,
+      "Religion": -75.42302441596885
+    }
+  }
+}

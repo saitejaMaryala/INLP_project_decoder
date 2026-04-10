@@ -1,0 +1,9 @@
+{
+  "gsq": {
+    "thresholds": {
+      "Gender_identity": -73.11157608032227,
+      "Race_ethnicity": -100.68384552001854,
+      "Religion": -81.37434124946495
+    }
+  }
+}
